@@ -19,6 +19,25 @@ Trả về dict: decision, n_errors, n_warn_images, n_images, warn_ratio (làm t
 from ..common import ERROR, WARN  # noqa: F401
 
 
+
+
 def decide(issues, image_stems, cfg, reviewed=frozenset()):
-    # TODO
-    raise NotImplementedError("gate chưa làm")
+    stems = set(image_stems)
+    n_images = len(stems)
+    n_errors = sum(1 for i in issues if i.severity == ERROR)
+    warn_imgs = {i.image for i in issues if i.severity == WARN and i.image in stems and i.image not in reviewed}
+    n_warn = len(warn_imgs)
+    ratio = n_warn / n_images if n_images else 0.0
+    thr = cfg["gate"]["warn_ratio_hold"]
+    reasons = []
+    if n_errors:
+        decision = "Rework"
+        reasons.append(f"còn {n_errors} lỗi bắt buộc chưa sửa: phải sửa hết trước khi xuất dataset")
+    elif ratio >= thr:
+        decision = "Hold"
+        reasons.append(f"{n_warn}/{n_images} ảnh ({ratio:.1%}) còn cảnh báo chưa người duyệt, từ ngưỡng {thr:.0%} trở lên")
+    else:
+        decision = "Release"
+        reasons.append(f"không còn lỗi bắt buộc; {n_warn}/{n_images} ảnh ({ratio:.1%}) còn cảnh báo, dưới ngưỡng {thr:.0%}")
+    return {"decision": decision, "n_errors": n_errors, "n_warn_images": n_warn, "n_images": n_images,
+            "warn_ratio": round(ratio, 4), "reasons": reasons}

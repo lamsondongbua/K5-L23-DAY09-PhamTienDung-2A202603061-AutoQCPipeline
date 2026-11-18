@@ -24,6 +24,44 @@ Gợi ý
 from ..common import ERROR, WARN, Issue, iou_xywh, parse_yolo_line  # noqa: F401
 
 
+
+
 def run(ds, cfg):
-    # TODO: duyệt từng file nhãn, từng dòng
-    raise NotImplementedError("check label_format chưa làm")
+    c = cfg["label_format"]
+    n_cls = len(ds.classes)
+    issues = []
+
+    def add(sev, code, stem, no, msg, **extra):
+        issues.append(Issue("label_format", sev, code, stem, msg, no, extra))
+
+    for lp in ds.label_files():
+        stem = lp.stem
+        size = ds.image_size(stem)
+        kept = []                                   # (lớp, box) các dòng hợp lệ trước đó, để so DUP_BOX
+        for no, text in ds.read_label_lines(stem) or []:
+            try:
+                cls, x, y, w, h = parse_yolo_line(text)
+            except ValueError as e:
+                add(ERROR, "BAD_FORMAT", stem, no, f"dòng nhãn sai định dạng: {e}")
+                continue
+            if not 0 <= cls < n_cls:
+                add(ERROR, "BAD_CLASS_ID", stem, no, f"id lớp {cls} ngoài 0..{n_cls - 1}")
+                continue
+            if w <= 0 or h <= 0:
+                add(ERROR, "BOX_ZERO", stem, no, f"box rỗng (w={w}, h={h})")
+                continue
+            box = (x, y, w, h)
+
+            over = max(0.0, -(x - w / 2), -(y - h / 2), (x + w / 2) - 1, (y + h / 2) - 1)
+            if over > c["overflow_tol"]:
+                add(ERROR, "BOX_OUT_OF_IMAGE", stem, no, f"box tràn ảnh {over:.4f}", overflow=round(over, 6))
+
+            if any(k == cls and iou_xywh(b, box) > c["dup_box_iou"] for k, b in kept):
+                add(ERROR, "DUP_BOX", stem, no, "box lặp (cùng lớp, IoU cao với dòng trước)")
+            kept.append((cls, box))
+
+            if size and min(w * size[0], h * size[1]) < c["min_box_px"]:
+                add(WARN, "BOX_TINY", stem, no, f"box quá nhỏ: cạnh ngắn {min(w * size[0], h * size[1]):.1f}px")
+            if w * h > c["max_box_frac"]:
+                add(WARN, "BOX_HUGE", stem, no, f"box phủ {w * h:.0%} ảnh")
+    return issues

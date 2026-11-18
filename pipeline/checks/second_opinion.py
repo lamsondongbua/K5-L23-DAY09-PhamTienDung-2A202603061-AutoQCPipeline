@@ -39,6 +39,57 @@ from ..common import WARN, Issue, iou_xywh, parse_yolo_line  # noqa: F401
 from ..model_cache import get_preds  # noqa: F401
 
 
+
+
 def run(ds, cfg, preds=None):
-    # TODO
-    raise NotImplementedError("check second_opinion chưa làm")
+    c = cfg["second_opinion"]
+    if preds is None:
+        preds = get_preds(ds, cfg, "checker")
+    issues = []
+
+    def add(code, stem, msg, line=None, **extra):
+        issues.append(Issue("second_opinion", WARN, code, stem, msg, line, extra))
+
+    for p in ds.image_files():
+        stem = p.stem
+        if stem not in preds:
+            continue
+        lines = ds.read_label_lines(stem)
+        size = ds.image_size(stem)
+        if lines is None or size is None:
+            continue
+        W, H = size
+        L = ds.valid_boxes(stem)
+        rows = preds[stem]
+        P = [r for r in rows if r[1] >= c["conf"] and (r[4] * W) * (r[5] * H) >= c["min_area_px"]]
+
+        for r in P:
+            cls, conf, box = int(r[0]), r[1], tuple(r[2:6])
+            cands = [(iou_xywh(box, b[1:]), b[0]) for b in L]
+            cands = [x for x in cands if x[0] >= c["iou_missing"]]
+            if not cands:
+                add("POSSIBLE_MISSING", stem, f"model thấy lớp {cls} (conf {conf:.2f}) nhưng nhãn không có box", conf=conf)
+                continue
+            same = [iou for iou, k in cands if k == cls]
+            if same:
+                best = max(same)
+                if best < c["iou_loose"]:
+                    add("POSSIBLE_LOOSE_BOX", stem, f"box cùng lớp nhưng lỏng (IoU {best:.2f})", conf=conf, iou=round(best, 3))
+                continue
+            best = max(iou for iou, _ in cands)
+            if best >= c["iou_match"]:
+                add("POSSIBLE_WRONG_CLASS", stem, f"model nói lớp {cls} (conf {conf:.2f}), nhãn khác lớp (IoU {best:.2f})",
+                    conf=conf, iou=round(best, 3))
+
+        fp_preds = [r for r in rows if r[1] >= c["fp_conf"]]
+        for no, text in lines:
+            try:
+                cls, x, y, w, h = parse_yolo_line(text)
+            except ValueError:
+                continue
+            if not 0 <= cls < len(ds.classes):
+                continue
+            best = max((iou_xywh((x, y, w, h), r[2:6]) for r in fp_preds), default=0.0)
+            if best < c["iou_missing"]:
+                add("POSSIBLE_FALSE_POS", stem, f"box nhãn không khớp vật nào model thấy (IoU tốt nhất {best:.2f})", no, iou=round(best, 3))
+    return issues
