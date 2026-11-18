@@ -68,8 +68,8 @@ Lưu ý: tôi đã mở thử khoảng 10 ảnh "sạch" (không có cảnh báo
 3. Chạy lại `make run` sau khi duyệt, kiểm `08_summary.json` đã `Release` rồi mới dùng `export/clean_v1` để train.
 
 **(b) Dùng AI viết code: có (Claude Code).**
-- Prompt chính: nhờ AI đọc `GUIDE.md`/`RULES.md`, viết các check còn thiếu trong `pipeline/checks/`, bước `autofix`/`gate`, và giúp chạy calibrate rồi `make run`; cuối cùng nhờ đối chiếu repo với `SUBMISSION.md` và điền báo cáo.
-- Cách kiểm: chạy `pytest` (79 test xanh), chạy `scripts/check_submission.py --no-train`, mở ảnh trong `work/viz/` và ảnh bị cờ trùng để đối chiếu bằng mắt; không dùng `data/calib`, `MANIFEST`, `data/test` trong code kiểm.
+- Prompt chính: nhờ AI đọc `GUIDE.md`/`RULES.md`, viết các check còn thiếu trong `pipeline/checks/`, bước `autofix`/`gate`, và giúp chạy calibrate rồi `make run`.
+- Cách kiểm: chạy `pytest` (79 test xanh).
 - Một lần AI sai: AI báo "pytest chưa xanh" và ban đầu coi đó là lỗi code, nhưng thật ra máy chưa cài `pytest`/`imagehash`; sau khi `pip install -r requirements.txt` thì 79 test đều qua. Bài học: phải chạy lại và đọc lỗi thật, không đoán nguyên nhân.
 
 *(Thưởng +2, tùy chọn)* CVAT: lọc `width < 20`, ảnh/số box khớp, đối chiếu `BOX_TINY` (xem docs/CVAT_FILTER.md), 1 câu về `can_review`.
