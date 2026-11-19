@@ -59,13 +59,30 @@ Chạy `python -X utf8 -m pipeline.run --budget 0 --reports work/rep_nb --export
 Lưu ý: tôi đã mở thử khoảng 10 ảnh "sạch" (không có cảnh báo, không được duyệt) để tìm lỗi mà máy bỏ sót. Có ảnh nhìn đáng ngờ (ví dụ `img_0098`, người lướt sóng ở giữa ảnh dường như không có box trong khi có một box nhỏ ở bọt sóng), nhưng tôi chưa đối chiếu được với nhãn đúng nên không đưa vào làm bằng chứng.
 
 ## 5. Train: raw vs clean (tùy chọn, chấm riêng)
-**Chưa chạy.** Phần này cần Colab (GPU T4) và repo public để notebook tải `submission/export` và `submission/reports` về, em đã đẩy repo lên và chạy notebook `notebooks/day09_train_compare.ipynb` nhưng vì lí do mạng không ổn định (mới chạy đến lần 3 epoch ở mục 6 không kịp thời gian nên quyết định bỏ phần này).
+Đã chạy trên Colab (GPU) bằng `scripts/train_compare.py`: model `yolo26n.pt`, 20 epoch, imgsz 640, batch 16, 2 seed (0 và 1) cho mỗi biến thể. Kết quả gốc nằm trong `submission/results/` (`raw_seed*.json`, `clean_seed*.json`, `comparison.json|md|png`), tôi không sửa tay.
+
+| biến thể | #ảnh train | mAP50 (TB ± độ lệch) | mAP50-95 | precision | recall |
+|---|---|---|---|---|---|
+| raw | 224 | 0.726 ± 0.000 | 0.512 ± 0.004 | 0.764 ± 0.061 | 0.649 ± 0.028 |
+| clean | 202 | 0.701 ± 0.025 | 0.487 ± 0.008 | 0.759 ± 0.003 | 0.625 ± 0.019 |
+
+Chênh mAP50 (clean − raw) = **−0.025**. Giá trị từng seed: raw 0.7256 / 0.7259, clean 0.7180 / 0.6832.
+
+**Kết luận: số liệu không ủng hộ "clean tốt hơn raw".** Clean thấp hơn raw ở cả bốn chỉ số, và chênh mAP50 (0.025) bằng đúng độ lệch giữa hai seed của clean (0.025), nên khác biệt nằm trong độ nhiễu. Chỉ có 2 seed nên chưa đủ để kết luận clean *kém hơn*; điều chắc chắn là chưa có bằng chứng clean *tốt hơn*.
+
+Một số điểm cần lưu ý khi đọc kết quả:
+- **Clean chưa phải bản đã phát hành.** `export/clean_v1` là bản nháp vì pipeline ở Hold (38/202 ảnh còn cảnh báo chưa người duyệt, mục 1). Bản này vẫn mang phần lớn nhãn máy chưa kiểm, nên chưa thể coi là "dữ liệu sạch" đúng nghĩa.
+- **Số ảnh train khác nhau.** Clean ít hơn raw 22 ảnh (202 so với 224) do bước nhận dữ liệu loại ảnh hỏng, quá nhỏ, trùng và rò rỉ test, nên một phần chênh lệch có thể do ít dữ liệu hơn chứ không phải do chất lượng nhãn.
+- **Lớp `truck` kéo điểm xuống.** AP50 của `truck` giảm từ 0.648 (raw, trung bình 2 seed) xuống 0.538 (clean), trong khi `car` (0.738 so với 0.738), `person` (0.822 so với 0.823) và `bus` (0.695 so với 0.703) gần như không đổi. Clean seed 1 có `truck` chỉ 0.486. Tôi chưa kiểm số box `truck` trong tập val nên không kết luận được nguyên nhân; nhiều khả năng là nhiễu do lớp này ít mẫu.
+- **Chưa dùng tập test.** Số liệu trên đo bằng tập val của lab; tôi không dùng `data/test/` để chọn ngưỡng hay sửa nhãn.
+
+Muốn có kết luận chắc hơn cần: người duyệt thật xử lý nốt các ảnh còn cảnh báo để pipeline đạt Release, rồi train lại với nhiều seed hơn (ví dụ 5) và so sánh lại.
 
 ## 6. Quyết định và ghi chú AI
 **(a) Quyết định cuối: Hold, chưa phát hành `clean_v1`.** Không còn lỗi bắt buộc, nhưng 38/202 ảnh (18,8%) vẫn còn cảnh báo ngữ nghĩa chưa người duyệt, vượt ngưỡng 10%. Để thành Release cần giảm xuống tối đa 20 ảnh có cảnh báo, bằng cách:
 1. Người thật duyệt nốt 45 ảnh nằm ngoài ngân sách 80 ảnh của hàng đợi (ưu tiên các ảnh còn `POSSIBLE_MISSING`, `POSSIBLE_FALSE_POS`, `POSSIBLE_LOOSE_BOX`), thay cho bước duyệt mô phỏng `human_review_sim.py`.
 2. Xem riêng điểm mù ở mục 4(b) (box lồng trong box phủ cả ảnh như `img_0128`) vì pipeline không tự bắt được.
-3. Chạy lại `make run` sau khi duyệt, kiểm `08_summary.json` đã `Release` rồi mới dùng `export/clean_v1` để train.
+3. Chạy lại `make run` sau khi duyệt, kiểm `08_summary.json` đã `Release` rồi mới dùng `export/clean_v1` để train chính thức. Lần train ở mục 5 chỉ là thử nghiệm trên bản nháp.
 
 **(b) Dùng AI viết code: có (Claude Code).**
 - Prompt chính: nhờ AI đọc `GUIDE.md`/`RULES.md`, viết các check còn thiếu trong `pipeline/checks/`, bước `autofix`/`gate`, và giúp chạy calibrate rồi `make run`.
