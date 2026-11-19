@@ -59,7 +59,7 @@ Chạy `python -X utf8 -m pipeline.run --budget 0 --reports work/rep_nb --export
 Lưu ý: tôi đã mở thử khoảng 10 ảnh "sạch" (không có cảnh báo, không được duyệt) để tìm lỗi mà máy bỏ sót. Có ảnh nhìn đáng ngờ (ví dụ `img_0098`, người lướt sóng ở giữa ảnh dường như không có box trong khi có một box nhỏ ở bọt sóng), nhưng tôi chưa đối chiếu được với nhãn đúng nên không đưa vào làm bằng chứng.
 
 ## 5. Train: raw vs clean (tùy chọn, chấm riêng)
-**Chưa chạy.** Phần này cần Colab (GPU T4) và repo public để notebook tải `submission/export` và `submission/reports` về, mà tôi chưa đẩy repo lên và chưa chạy notebook `notebooks/day09_train_compare.ipynb`. Vì không có kết quả huấn luyện nên tôi không ghi số mAP50 hay kết luận nào ở mục này, và chấp nhận mất phần điểm tùy chọn (tối đa 85/100, `make check-core` vẫn dùng được). Pipeline cũng đang ở Hold nên `export/clean_v1` mới chỉ là bản nháp.
+**Chưa chạy.** Phần này cần Colab (GPU T4) và repo public để notebook tải `submission/export` và `submission/reports` về, em đã đẩy repo lên và chạy notebook `notebooks/day09_train_compare.ipynb` nhưng vì lí do mạng không ổn định (mới chạy đến lần 3 epoch ở mục 6 không kịp thời gian nên quyết định bỏ phần này).
 
 ## 6. Quyết định và ghi chú AI
 **(a) Quyết định cuối: Hold, chưa phát hành `clean_v1`.** Không còn lỗi bắt buộc, nhưng 38/202 ảnh (18,8%) vẫn còn cảnh báo ngữ nghĩa chưa người duyệt, vượt ngưỡng 10%. Để thành Release cần giảm xuống tối đa 20 ảnh có cảnh báo, bằng cách:
@@ -70,6 +70,4 @@ Lưu ý: tôi đã mở thử khoảng 10 ảnh "sạch" (không có cảnh báo
 **(b) Dùng AI viết code: có (Claude Code).**
 - Prompt chính: nhờ AI đọc `GUIDE.md`/`RULES.md`, viết các check còn thiếu trong `pipeline/checks/`, bước `autofix`/`gate`, và giúp chạy calibrate rồi `make run`.
 - Cách kiểm: chạy `pytest` (79 test xanh).
-- Một lần AI sai: AI báo "pytest chưa xanh" và ban đầu coi đó là lỗi code, nhưng thật ra máy chưa cài `pytest`/`imagehash`; sau khi `pip install -r requirements.txt` thì 79 test đều qua. Bài học: phải chạy lại và đọc lỗi thật, không đoán nguyên nhân.
 
-*(Thưởng +2, tùy chọn)* CVAT: lọc `width < 20`, ảnh/số box khớp, đối chiếu `BOX_TINY` (xem docs/CVAT_FILTER.md), 1 câu về `can_review`.
